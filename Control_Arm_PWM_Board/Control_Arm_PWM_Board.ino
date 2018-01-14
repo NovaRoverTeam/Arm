@@ -29,22 +29,24 @@ const int directionSpinPin = 4;
 const int directionRollPin = 7;
 
 
-
+///////////////////////////////////  Variables to change ////////////////////////////
 
 //Joint Angles
 int horizonAngle = 90;    // Range: (40,160) 
-int azimuthAngle = 60;    // Range: (-,-)   axis not really usable
+int azimuthAngle = 60;    // Range: (0,180)   axis not really usable
 int lowerAngle = 100;     // Range: (77,148)
 int upperAngle = 100;     // Range: (75,156)
 int endAngle = 120;        // Range: (35,120)
-
-// General motor speed
-int speed = 2048;   // out of 4095
 
 //Specific Speeds out of 4095
 //Negative number changes direction
 int spinSpeed = 0; // 1024 is good
 int rollSpeed = 0; // 4095 is good
+
+// General motor speed and linear actuator speed
+int speed = 2048;   // out of 4095
+
+////////////////////////////////////////////////////////////////////////////////////
                
 
 
@@ -76,6 +78,7 @@ void setup()
     pwm.setPWM(i, 0, 0);
   }
 }
+
 static inline int8_t isPositive(int val) {
  if (val < 0) return 0;
  if (val==0) return 0;
