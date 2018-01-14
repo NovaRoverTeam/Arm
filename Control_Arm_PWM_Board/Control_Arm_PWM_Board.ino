@@ -9,6 +9,10 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
 
+//#define USE_USBCON // May not need this line, depending on Arduino nano hardware
+#include <ros.h>       // ROS Arduino library
+#include <rover/ArmCmd.h> // ROS msg for arm commands
+
 // PWM board initialisation
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
@@ -54,14 +58,43 @@ int rollSpeed = 0; // 4095 is good
 // General motor speed and linear actuator speed
 int speed = 2048;   // out of 4095
 
+
 ////////////////////////////////////////////////////////////////////////////////////
                
-
-
 //Variables for angle read from potentiometers
 int lowerReadAngle = 0;
 int upperReadAngle = 0;
 
+
+////////////////////////////// ROS CALLBACK ////////////////////////////////////////
+
+// Declare required ROS variables
+ros::NodeHandle  nh;
+
+// Callback function to execute on receiving arm command from base station
+void msgCallback (const rover::ArmCmd& msg)
+{
+  int incrm = msg.sensitivity; // Amount to increment by, value 1-5
+
+  // Increment each arm DoF according to the arm command
+  lowerAngle   = constrain(lowerAngle   + incrm*msg.shoulder, 77, 148);
+  upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  75, 156);
+  horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  40, 160);
+  azimuthAngle = constrain(azimuthAngle + incrm*msg.wrist_y,   0, 180);
+  endAngle     = constrain(endAngle     + incrm*msg.grip,     35, 120);
+
+  // gripper roll speed is a fraction of the speed of 4095, based on sensitivity
+  rollSpeed = (int) (4095.0*((float) msg.twist)*((float) incrm)/5.0); 
+
+  // base spin speed is a fraction of the speed of 1024, based on sensitivity
+  spinSpeed = (int) (1024.0*((float) msg.base)*((float) incrm)/5.0);   
+}
+
+// may need to subscribe to "mainframe/arm_cmd_data" instead if this doesn't work
+ros::Subscriber<rover::ArmCmd> arm_sub("arm_cmd_data", &msgCallback);
+
+
+//////////////////////////////// MAIN CODE /////////////////////////////////////////
 
 // Setup function for pins, serial for debug and PWM
 void setup()
