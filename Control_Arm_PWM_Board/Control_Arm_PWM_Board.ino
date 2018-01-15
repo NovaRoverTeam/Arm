@@ -151,8 +151,7 @@ void actuatorLower(int angle, int speed)
   
   lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);        // Read PWM voltage and scale to joint angle
   
-  while(lowerReadAngle != angle)                                    // While the read angle isn't the wanted angle
-  {
+
     if (lowerReadAngle > angle)                                     // Extend or retract the actuator accordingly
     {
       pwm.setPWM(lowerPWMPin, 0, speed);
@@ -163,12 +162,14 @@ void actuatorLower(int angle, int speed)
       pwm.setPWM(lowerPWMPin, 0, speed);
       digitalWrite(directionLowerPin, LOW);
     }
-   
+    else 
+    {
+      pwm.setPWM(lowerPWMPin, 0, 0);
+    }
+    
     //Serial.println("Actuator Lower");
-    //Serial.println(val1);
-    lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);
-  }
-  pwm.setPWM(lowerPWMPin, 0, 0);                                    // Stop movement
+    //Serial.println(lowerReadAngle);
+    lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);                                  // Stop movement
   
 }
 
@@ -177,8 +178,7 @@ void actuatorUpper(int angle, int speed)
 {
   upperReadAngle = map(analogRead(upperPin),95,406,156,75);              // Read PWM voltage and scale to joint angle
   
-  while(upperReadAngle != angle)                                         // While the read angle isn't the wanted angle
-  {
+
 
     if (upperReadAngle > angle)                                           // Extend or retract the actuator accordingly
     {
@@ -190,13 +190,14 @@ void actuatorUpper(int angle, int speed)
       pwm.setPWM(upperPWMPin, 0, speed);
       digitalWrite(directionUpperPin, LOW);
     }
+    else {
+      pwm.setPWM(upperPWMPin, 0, 0);
+    }
     
     //Serial.println("Actuator Upper");
     //Serial.println(upperReadAngle);
-    //Serial.println(angle);
+    
     upperReadAngle = map(analogRead(upperPin),95,406,156,75);
-  }
-  pwm.setPWM(upperPWMPin, 0, 0);                                    // Stop movement
 }
 
 
