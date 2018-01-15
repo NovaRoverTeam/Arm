@@ -216,7 +216,6 @@ void loop()
   pwm.setPWM(endservoPWMPin, 0, map(endAngle,0,180,SERVOMIN,SERVOMAX));     // Set servo position
   delay(15);                                                                // ensure the servo has time to move
 
-
   pwm.setPWM(spinPWMPin, 0, abs(spinSpeed));                                // Set Motor PWM
   digitalWrite(directionSpinPin, isPositive(spinSpeed));                    // Set Motor direction
 
@@ -226,3 +225,4 @@ void loop()
     
   nh.spinOnce();
 }
+
