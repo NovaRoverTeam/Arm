@@ -9,7 +9,7 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
 
-//#define USE_USBCON // May not need this line, depending on Arduino nano hardware
+//#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
 #include <ros.h>       // ROS Arduino library
 #include <rover/ArmCmd.h> // ROS msg for arm commands
 
@@ -100,7 +100,10 @@ ros::Subscriber<rover::ArmCmd> arm_sub("arm_cmd_data", &msgCallback);
 void setup()
 {
   //  setup serial
-  Serial.begin(9600);             
+  //Serial.begin(9600);    
+
+  nh.initNode();
+  nh.subscribe(arm_sub);
 
   //Set pins
   pinMode(directionLowerPin, OUTPUT);
@@ -133,12 +136,12 @@ void setServoPulse(uint8_t n, double pulse) {
   
   pulselength = 1000000;   // 1,000,000 us per second
   pulselength /= 60;   // 60 Hz
-  Serial.print(pulselength); Serial.println(" us per period"); 
+  //Serial.print(pulselength); Serial.println(" us per period"); 
   pulselength /= 4096;  // 12 bits of resolution
-  Serial.print(pulselength); Serial.println(" us per bit"); 
+  //Serial.print(pulselength); Serial.println(" us per bit"); 
   pulse *= 1000;
   pulse /= pulselength;
-  Serial.println(pulse);
+  //Serial.println(pulse);
   pwm.setPWM(n, 0, pulse);
 }
 
@@ -220,9 +223,6 @@ void loop()
   pwm.setPWM(rollPWMPin,0,abs(rollSpeed));                                  // Set Motor PWM
   digitalWrite(directionRollPin,isPositive(rollSpeed));                     // Set Motor direction
 
-  
-  
-  
-
-  
+    
+  nh.spinOnce();
 }
