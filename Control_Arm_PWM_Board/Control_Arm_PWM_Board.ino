@@ -30,7 +30,7 @@ const int endPWMPin = 4;
 const int azimuthPWMPin = 5;
 const int horizonPWMPin = 6;
 
-const int endservoPWMPin = 7;
+
 
 //Arduino Pins
 const int lowerPin = 6;           
@@ -39,6 +39,7 @@ const int directionLowerPin = 5;
 const int directionUpperPin = 6;
 const int directionSpinPin = 4;
 const int directionRollPin = 7;
+const int directionEndPin = 8;
 
 
 ///////////////////////////////////  Variables to change ////////////////////////////
@@ -48,12 +49,13 @@ int horizonAngle = 90;    // Range: (40,160)
 int azimuthAngle = 60;    // Range: (0,180)   axis not really usable
 int lowerAngle = 100;     // Range: (77,148)
 int upperAngle = 100;     // Range: (75,156)
-int endAngle = 120;        // Range: (35,120)
+
 
 //Specific Speeds out of 4095
 //Negative number changes direction
 int spinSpeed = 0; // 1024 is good
 int rollSpeed = 0; // 4095 is good
+int endSpeed = 0; // 2048 is good
 
 // General motor speed and linear actuator speed
 int speed = 2048;   // out of 4095
@@ -81,13 +83,19 @@ void msgCallback (const rover::ArmCmd& msg)
   upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  75, 156);
   horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  40, 160);
   azimuthAngle = constrain(azimuthAngle + incrm*msg.wrist_y,   0, 180);
-  endAngle     = constrain(endAngle     + incrm*msg.grip,     35, 120);
+  //endAngle     = constrain(endAngle     + incrm*msg.grip,     35, 120);
 
+  // gripper speed is a fraction of the speed of 2048, based on sensitivity
+  endSpeed = (int) (2048.0*((float) msg.grip)*((float) incrm)/5.0); 
+  
+  
   // gripper roll speed is a fraction of the speed of 4095, based on sensitivity
   rollSpeed = (int) (4095.0*((float) msg.twist)*((float) incrm)/5.0); 
 
   // base spin speed is a fraction of the speed of 1024, based on sensitivity
-  spinSpeed = (int) (1024.0*((float) msg.base)*((float) incrm)/5.0);   
+  spinSpeed = (int) (1024.0*((float) msg.base)*((float) incrm)/5.0); 
+  
+  
 }
 
 // may need to subscribe to "mainframe/arm_cmd_data" instead if this doesn't work
@@ -110,6 +118,7 @@ void setup()
   pinMode(directionUpperPin, OUTPUT);
   pinMode(directionSpinPin, OUTPUT);
   pinMode(directionRollPin, OUTPUT);
+  pinMode(directionEndPin, OUTPUT);
 
   pwm.begin();
   
@@ -214,15 +223,15 @@ void loop()
   pwm.setPWM(horizonPWMPin, 0, map(horizonAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
   delay(15);                                                                // ensure the servo has time to move
 
-  pwm.setPWM(endservoPWMPin, 0, map(endAngle,0,180,SERVOMIN,SERVOMAX));     // Set servo position
-  delay(15);                                                                // ensure the servo has time to move
-
   pwm.setPWM(spinPWMPin, 0, abs(spinSpeed));                                // Set Motor PWM
   digitalWrite(directionSpinPin, isPositive(spinSpeed));                    // Set Motor direction
 
   pwm.setPWM(rollPWMPin,0,abs(rollSpeed));                                  // Set Motor PWM
   digitalWrite(directionRollPin,isPositive(rollSpeed));                     // Set Motor direction
 
+  pwm.setPWM(endPWMPin,0,abs(endSpeed));
+  digitalWrite(directionEndPin,isPositive(endSpeed));
+  
     
   nh.spinOnce();
 }
