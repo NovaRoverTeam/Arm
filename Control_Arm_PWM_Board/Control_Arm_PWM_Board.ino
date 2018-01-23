@@ -8,6 +8,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
+#include <servo.h>
 
 //#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
 #include <ros.h>       // ROS Arduino library
@@ -28,6 +29,8 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define AZIMUTHMIN 0
 #define AZIMUTHMAX 180
 
+Servo horizonServo;
+
 //PWM Pins
 const int spinPWMPin = 0;
 const int lowerPWMPin = 1;
@@ -36,7 +39,7 @@ const int rollPWMPin = 3;
 const int endPWMPin = 4;
 
 const int azimuthPWMPin = 5;
-const int horizonPWMPin = 6;
+
 
 
 
@@ -48,6 +51,7 @@ const int directionUpperPin = 6;
 const int directionSpinPin = 4;
 const int directionRollPin = 7;
 const int directionEndPin = 8;
+const int horizonPWMPin = 9;
 
 
 ///////////////////////////////////  Variables to change ////////////////////////////
@@ -140,6 +144,7 @@ void setup()
   pinMode(directionSpinPin, OUTPUT);
   pinMode(directionRollPin, OUTPUT);
   pinMode(directionEndPin, OUTPUT);
+  horizonServo.attach(horizonPWMPin);
 
   pwm.begin();
   
@@ -252,7 +257,7 @@ void loop()
   pwm.setPWM(azimuthPWMPin, 0, map(azimuthAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
   delay(15);                                                                // ensure the servo has time to move
   
-  pwm.setPWM(horizonPWMPin, 0, map(horizonAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
+  horizonServo.write(horizonAngle);  // Set servo position
   delay(15);                                                                // ensure the servo has time to move
 
   pwm.setPWM(spinPWMPin, 0, abs(spinSpeed));                                // Set Motor PWM
