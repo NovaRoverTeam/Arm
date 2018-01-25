@@ -8,7 +8,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
-#include <servo.h>
+#include <Servo.h>
 
 //#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
 #include <ros.h>       // ROS Arduino library
