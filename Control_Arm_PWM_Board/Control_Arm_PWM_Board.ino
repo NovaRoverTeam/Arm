@@ -82,6 +82,12 @@ bool upperBusy = 0;
 int lowerReadAngle = 0;
 int upperReadAngle = 0;
 
+// Potentiometer endpoints
+int lowerPotMin;
+int lowerPotMax;
+int upperPotMin;
+int upperPotMax;
+
 
 ////////////////////////////// ROS CALLBACK ////////////////////////////////////////
 
@@ -156,6 +162,8 @@ void setup()
   {
     pwm.setPWM(i, 0, 0);
   }
+  
+  calibrate();
 }
 
 // Function to decode motor direction, returns 1 if positive number, 0 otherwise
@@ -183,7 +191,7 @@ void setServoPulse(uint8_t n, double pulse) {
 void actuatorLower(int angle, int speed)
 {
   
-  lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);        // Read PWM voltage and scale to joint angle
+  lowerReadAngle = map(analogRead(lowerPin),lowerPotMin,lowerPotMax,148,77);        // Read PWM voltage and scale to joint angle
   
 
     if (lowerReadAngle > angle)                                     // Extend or retract the actuator accordingly
@@ -209,14 +217,14 @@ void actuatorLower(int angle, int speed)
     
     //Serial.println("Actuator Lower");
     //Serial.println(lowerReadAngle);
-    lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);                                  // Stop movement
+    lowerReadAngle = map(analogRead(lowerPin),lowerPotMin,lowerPotMax,148,77);                                  // Stop movement
   
 }
 
 // Function sets the upper linear actuator position given potentiometer voltage for this actuator's range of movement
 void actuatorUpper(int angle, int speed)
 {
-  upperReadAngle = map(analogRead(upperPin),95,406,156,75);              // Read PWM voltage and scale to joint angle
+  upperReadAngle = map(analogRead(upperPin),upperPotMin,upperPotMax,156,75);              // Read PWM voltage and scale to joint angle
   
 
 
@@ -243,9 +251,24 @@ void actuatorUpper(int angle, int speed)
     //Serial.println("Actuator Upper");
     //Serial.println(upperReadAngle);
     
-    upperReadAngle = map(analogRead(upperPin),95,406,156,75);
+    upperReadAngle = map(analogRead(upperPin),upperPotMin,upperPotMax,156,75);
 }
 
+void calibrate() // Function to calibrate the potentiometer position readings for the arms available movement
+{
+      pwm.setPWM(lowerPWMPin, 0, 4095);
+      pwm.setPWM(upperPWMPin, 0, 4095);
+      digitalWrite(directionLowerPin, LOW);
+      digitalWrite(directionUpperPin, LOW);           // Move to end point and wait
+      delay(10000);
+      lowerPotMin = analogRead(lowerPin);             // Set values read
+      upperPotMin = analogRead(upperPin);
+      digitalWrite(directionUpperPin, HIGH);           // Move to other end point and wait
+      digitalWrite(directionLowerPin, HIGH);
+      delay(10000);
+      lowerPotMax = analogRead(lowerPin);                // Set values read
+      upperPotMax = analogRead(upperPin);
+}
 
 //////////////////////////////////// Main Software Loop /////////////////////////////////////
 void loop()
