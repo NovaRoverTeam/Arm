@@ -8,6 +8,7 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
+#include <Servo.h>
 
 //#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
 #include <ros.h>       // ROS Arduino library
@@ -19,6 +20,16 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define SERVOMIN  150 // this is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX  600 // this is the 'maximum' pulse length count (out of 4096)
 
+#define LOWERMIN 77     //Defining bounds of movement
+#define LOWERMAX 148
+#define UPPERMIN 75
+#define UPPERMAX 156
+#define HORIZONMIN 40
+#define HORIZONMAX 160
+#define AZIMUTHMIN 0
+#define AZIMUTHMAX 180
+
+Servo horizonServo;
 
 //PWM Pins
 const int spinPWMPin = 0;
@@ -28,7 +39,7 @@ const int rollPWMPin = 3;
 const int endPWMPin = 4;
 
 const int azimuthPWMPin = 5;
-const int horizonPWMPin = 6;
+
 
 
 
@@ -40,6 +51,7 @@ const int directionUpperPin = 6;
 const int directionSpinPin = 4;
 const int directionRollPin = 7;
 const int directionEndPin = 8;
+const int horizonPWMPin = 9;
 
 
 ///////////////////////////////////  Variables to change ////////////////////////////
@@ -62,10 +74,19 @@ int speed = 2048;   // out of 4095
 
 
 ////////////////////////////////////////////////////////////////////////////////////
-               
+// Flags or 'semaphores' to prevent incrementing angles while actuator moving
+bool lowerBusy = 0;
+bool upperBusy = 0;
+
 //Variables for angle read from potentiometers
 int lowerReadAngle = 0;
 int upperReadAngle = 0;
+
+// Potentiometer endpoints
+int lowerPotMin;
+int lowerPotMax;
+int upperPotMin;
+int upperPotMax;
 
 
 ////////////////////////////// ROS CALLBACK ////////////////////////////////////////
@@ -77,14 +98,27 @@ ros::NodeHandle  nh;
 void msgCallback (const rover::ArmCmd& msg)
 {
   int incrm = msg.sensitivity; // Amount to increment by, value 1-5
-  int lastback = back;
-  int back = msg.back;
+
+  int lastback;
+  int back;
+  lastback = back;
+  back = msg.back;
 
   // Increment each arm DoF according to the arm command
-  lowerAngle   = constrain(lowerAngle   + incrm*msg.shoulder, 77, 148);
-  upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  75, 156);
-  horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  40, 160);
-  azimuthAngle = constrain(azimuthAngle + incrm*msg.wrist_y,   0, 180);
+  
+  if (!lowerBusy)         // Only increment if the actuator has reached the previously wanted position
+  {
+    lowerAngle   = constrain(lowerAngle   + incrm*msg.shoulder, LOWERMIN, LOWERMAX);
+    lowerBusy = 1;        // Lock the semaphore
+  }
+  if (!upperBusy)         // Only increment if the actuator has reached the previously wanted position
+  {
+    upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  UPPERMIN, UPPERMAX);
+    upperBusy = 1;        // Lock the semaphore
+  }
+  
+  horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  HORIZONMIN, HORIZONMAX);
+  azimuthAngle = constrain(azimuthAngle + incrm*msg.wrist_y,   AZIMUTHMIN, AZIMUTHMAX);
   //endAngle     = constrain(endAngle     + incrm*msg.grip,     35, 120);
 
   // gripper speed is a fraction of the speed of 2048, based on sensitivity
@@ -101,8 +135,6 @@ void msgCallback (const rover::ArmCmd& msg)
   {
     calibrate();
   }
-
-  
   
 }
 
@@ -127,11 +159,11 @@ void setup()
   pinMode(directionSpinPin, OUTPUT);
   pinMode(directionRollPin, OUTPUT);
   pinMode(directionEndPin, OUTPUT);
+  horizonServo.attach(horizonPWMPin);
 
   pwm.begin();
   
-  pwm.setPWMFreq(60);  // Analog servos run at ~60 Hz updates
-
+  pwm.setPWMFreq(500);  // Higher frequency for smoother linear actuator movement
   yield();
 
   //Set all PWM's Initially to 0
@@ -139,7 +171,7 @@ void setup()
   {
     pwm.setPWM(i, 0, 0);
   }
-
+  
   calibrate();
 }
 
@@ -168,7 +200,7 @@ void setServoPulse(uint8_t n, double pulse) {
 void actuatorLower(int angle, int speed)
 {
   
-  lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);        // Read PWM voltage and scale to joint angle
+  lowerReadAngle = map(analogRead(lowerPin),lowerPotMin,lowerPotMax,148,77);        // Read PWM voltage and scale to joint angle
   
 
     if (lowerReadAngle > angle)                                     // Extend or retract the actuator accordingly
@@ -184,18 +216,24 @@ void actuatorLower(int angle, int speed)
     else 
     {
       pwm.setPWM(lowerPWMPin, 0, 0);
+      lowerBusy = 0;                                              // release the semaphore
+    }
+  
+    if (angle > LOWERMAX - 5 || angle < LOWERMIN + 5) // prevent actuator from getting stuck at limits of range
+    {
+      lowerBusy = 0;
     }
     
     //Serial.println("Actuator Lower");
     //Serial.println(lowerReadAngle);
-    lowerReadAngle = map(analogRead(lowerPin),291,555,148,77);                                  // Stop movement
+    lowerReadAngle = map(analogRead(lowerPin),lowerPotMin,lowerPotMax,148,77);                                  // Stop movement
   
 }
 
 // Function sets the upper linear actuator position given potentiometer voltage for this actuator's range of movement
 void actuatorUpper(int angle, int speed)
 {
-  upperReadAngle = map(analogRead(upperPin),95,406,156,75);              // Read PWM voltage and scale to joint angle
+  upperReadAngle = map(analogRead(upperPin),upperPotMin,upperPotMax,156,75);              // Read PWM voltage and scale to joint angle
   
 
 
@@ -211,14 +249,35 @@ void actuatorUpper(int angle, int speed)
     }
     else {
       pwm.setPWM(upperPWMPin, 0, 0);
+      upperBusy = 0;                                  // release the semaphore
+    }
+  
+    if (angle > UPPERMAX - 5 || angle < UPPERMIN + 5) // prevent actuator from getting stuck at limits of range
+    {
+      upperBusy = 0;
     }
     
     //Serial.println("Actuator Upper");
     //Serial.println(upperReadAngle);
     
-    upperReadAngle = map(analogRead(upperPin),95,406,156,75);
+    upperReadAngle = map(analogRead(upperPin),upperPotMin,upperPotMax,156,75);
 }
 
+void calibrate() // Function to calibrate the potentiometer position readings for the arms available movement
+{
+      pwm.setPWM(lowerPWMPin, 0, 4095);
+      pwm.setPWM(upperPWMPin, 0, 4095);
+      digitalWrite(directionLowerPin, LOW);
+      digitalWrite(directionUpperPin, LOW);           // Move to end point and wait
+      delay(10000);
+      lowerPotMin = analogRead(lowerPin);             // Set values read
+      upperPotMin = analogRead(upperPin);
+      digitalWrite(directionUpperPin, HIGH);           // Move to other end point and wait
+      digitalWrite(directionLowerPin, HIGH);
+      delay(10000);
+      lowerPotMax = analogRead(lowerPin);                // Set values read
+      upperPotMax = analogRead(upperPin);
+}
 
 //////////////////////////////////// Main Software Loop /////////////////////////////////////
 void loop()
@@ -230,7 +289,7 @@ void loop()
   pwm.setPWM(azimuthPWMPin, 0, map(azimuthAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
   delay(15);                                                                // ensure the servo has time to move
   
-  pwm.setPWM(horizonPWMPin, 0, map(horizonAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
+  horizonServo.write(horizonAngle);  // Set servo position
   delay(15);                                                                // ensure the servo has time to move
 
   pwm.setPWM(spinPWMPin, 0, abs(spinSpeed));                                // Set Motor PWM
