@@ -9,6 +9,7 @@
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
 #include <Servo.h>
+#include <EEPROM.h>
 
 //#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
 #include <ros.h>       // ROS Arduino library
@@ -28,6 +29,9 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define HORIZONMAX 160
 #define AZIMUTHMIN 0
 #define AZIMUTHMAX 180
+
+#define l1 42.5
+#define l2  56
 
 Servo horizonServo;
 
@@ -88,6 +92,7 @@ int lowerPotMax;
 int upperPotMin;
 int upperPotMax;
 
+const double pi = 3.14159265;
 
 ////////////////////////////// ROS CALLBACK ////////////////////////////////////////
 
@@ -99,22 +104,43 @@ void msgCallback (const rover::ArmCmd& msg)
 {
   int incrm = msg.sensitivity; // Amount to increment by, value 1-5
 
-  int lastback;
-  int back;
-  lastback = back;
+  int lastBack = 0;
+  int back = 0;
+  int start = 0;
+  int lastStart = 0;
+  int coordSystem = 0;
+  double x;
+  double y;
+  
+  lastBack = back;
   back = msg.back;
 
+  lastStart = start;
+  start = msg.start;
+
   // Increment each arm DoF according to the arm command
-  
-  if (!lowerBusy)         // Only increment if the actuator has reached the previously wanted position
+
+  if (coordSystem == 0)
   {
-    lowerAngle   = constrain(lowerAngle   + incrm*msg.shoulder, LOWERMIN, LOWERMAX);
-    lowerBusy = 1;        // Lock the semaphore
-  }
-  if (!upperBusy)         // Only increment if the actuator has reached the previously wanted position
+    if (!lowerBusy)         // Only increment if the actuator has reached the previously wanted position
+    {
+      lowerAngle   = constrain(lowerAngle   + incrm*msg.shoulder, LOWERMIN, LOWERMAX);
+      lowerBusy = 1;        // Lock the semaphore
+    }
+    if (!upperBusy)         // Only increment if the actuator has reached the previously wanted position
+    {
+      upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  UPPERMIN, UPPERMAX);
+      upperBusy = 1;        // Lock the semaphore
+    }
+  } else if (coordSystem == 1 && (!lowerBusy && !upperBusy))
   {
-    upperAngle   = constrain(upperAngle   + incrm*msg.forearm,  UPPERMIN, UPPERMAX);
-    upperBusy = 1;        // Lock the semaphore
+    x =  -l1*cos(lowerAngle*(pi/180)) + l2*cos((lowerAngle - upperAngle)*(pi/180)) + incrm*msg.shoulder;
+    y = l1*sin(lowerAngle*(pi/180)) - l2*sin((lowerAngle - upperAngle)*(pi/180)) + incrm*msg.forearm;
+
+    lowerAngle = constrain(round( (pi-acos((pow(l1,2)-pow(l2,2)+pow(x,2)+pow(y,2))/(2*l1*sqrt(pow(x,2)+pow(y,2))))-atan(y/x))*(180/pi)), LOWERMIN, LOWERMAX);
+    upperAngle = constrain(round( (pi-acos((-pow(l1,2)-pow(l2,2)+pow(x,2)+pow(y,2))/(2*l1*l2)))*(180/pi)),  UPPERMIN, UPPERMAX);
+    lowerBusy = 1;
+    upperBusy = 1; 
   }
   
   horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  HORIZONMIN, HORIZONMAX);
@@ -131,9 +157,14 @@ void msgCallback (const rover::ArmCmd& msg)
   // base spin speed is a fraction of the speed of 1024, based on sensitivity
   spinSpeed = (int) (1024.0*((float) msg.base)*((float) incrm)/5.0); 
 
-  if (!lastback && back)
+  if (lastBack == 0 && back == 1 )
   {
     calibrate();
+  }
+  if (lastStart == 0 && start == 1)
+  {
+    coordSystem += 1;
+    coordSystem = coordSystem % 2;
   }
   
 }
@@ -171,8 +202,12 @@ void setup()
   {
     pwm.setPWM(i, 0, 0);
   }
-  
-  calibrate();
+
+  lowerPotMin = EEPROMReadlong(0);
+  lowerPotMax = EEPROMReadlong(4);
+  upperPotMin = EEPROMReadlong(8);
+  upperPotMax = EEPROMReadlong(12);
+  //calibrate();
 }
 
 // Function to decode motor direction, returns 1 if positive number, 0 otherwise
@@ -271,13 +306,49 @@ void calibrate() // Function to calibrate the potentiometer position readings fo
       digitalWrite(directionUpperPin, LOW);           // Move to end point and wait
       delay(10000);
       lowerPotMin = analogRead(lowerPin);             // Set values read
+      EEPROMWritelong(0, lowerPotMin);
       upperPotMin = analogRead(upperPin);
+      EEPROMWritelong(8, upperPotMin);
       digitalWrite(directionUpperPin, HIGH);           // Move to other end point and wait
       digitalWrite(directionLowerPin, HIGH);
       delay(10000);
       lowerPotMax = analogRead(lowerPin);                // Set values read
+      EEPROMWritelong(4, lowerPotMax);
       upperPotMax = analogRead(upperPin);
+      EEPROMWritelong(12, upperPotMax);
 }
+
+//This function will write a 4 byte (32bit) long to the eeprom at
+//the specified address to address + 3.
+void EEPROMWritelong(int address, long value)
+      {
+      //Decomposition from a long to 4 bytes by using bitshift.
+      //One = Most significant -> Four = Least significant byte
+      byte four = (value & 0xFF);
+      byte three = ((value >> 8) & 0xFF);
+      byte two = ((value >> 16) & 0xFF);
+      byte one = ((value >> 24) & 0xFF);
+
+      //Write the 4 bytes into the eeprom memory.
+      EEPROM.write(address, four);
+      EEPROM.write(address + 1, three);
+      EEPROM.write(address + 2, two);
+      EEPROM.write(address + 3, one);
+      }
+
+//This function will return a 4 byte (32bit) long from the eeprom
+//at the specified address to address + 3.
+long EEPROMReadlong(long address)
+      {
+      //Read the 4 bytes from the eeprom memory.
+      long four = EEPROM.read(address);
+      long three = EEPROM.read(address + 1);
+      long two = EEPROM.read(address + 2);
+      long one = EEPROM.read(address + 3);
+
+      //Return the recomposed long by using bitshift.
+      return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) + ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
+      }
 
 //////////////////////////////////// Main Software Loop /////////////////////////////////////
 void loop()
