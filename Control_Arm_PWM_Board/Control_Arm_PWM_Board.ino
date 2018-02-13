@@ -8,7 +8,6 @@
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <math.h>
-#include <Servo.h>
 #include <EEPROM.h>
 
 //#define USE_USBCON     // May not need this line, depending on Arduino nano hardware
@@ -25,15 +24,12 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 #define LOWERMAX 148
 #define UPPERMIN 75
 #define UPPERMAX 156
-#define HORIZONMIN 40
-#define HORIZONMAX 160
-#define AZIMUTHMIN 0
-#define AZIMUTHMAX 180
+
 
 #define l1 42.5
 #define l2  56
 
-Servo horizonServo;
+
 
 //PWM Pins
 const int spinPWMPin = 0;
@@ -43,6 +39,7 @@ const int rollPWMPin = 3;
 const int endPWMPin = 4;
 
 const int azimuthPWMPin = 5;
+const int horizonPWMPin = 6;
 
 
 
@@ -55,7 +52,8 @@ const int directionUpperPin = 6;
 const int directionSpinPin = 4;
 const int directionRollPin = 7;
 const int directionEndPin = 8;
-const int horizonPWMPin = 9;
+const int directionAzimuthPin = 9;
+const int directionHorizonPin = 10;
 
 
 ///////////////////////////////////  Variables to change ////////////////////////////
@@ -72,6 +70,8 @@ int upperAngle = 100;     // Range: (75,156)
 int spinSpeed = 0; // 1024 is good
 int rollSpeed = 0; // 4095 is good
 int endSpeed = 0; // 2048 is good
+int azimuthSpeed = 0;
+int horizonSpeed = 0;
 
 // General motor speed and linear actuator speed
 int speed = 2048;   // out of 4095
@@ -142,13 +142,13 @@ void msgCallback (const rover::ArmCmd& msg)
     lowerBusy = 1;
     upperBusy = 1; 
   }
-  
-  horizonAngle = constrain(horizonAngle + incrm*msg.wrist_x,  HORIZONMIN, HORIZONMAX);
-  azimuthAngle = constrain(azimuthAngle + incrm*msg.wrist_y,   AZIMUTHMIN, AZIMUTHMAX);
-  //endAngle     = constrain(endAngle     + incrm*msg.grip,     35, 120);
 
-  // gripper speed is a fraction of the speed of 2048, based on sensitivity
-  endSpeed = (int) (2048.0*((float) msg.grip)*((float) incrm)/5.0); 
+  // wrist speed is a fraction of the speed of 4095, based on sensitivity
+  horizonSpeed = (int) (4095.0*((float) msg.wrist_y)*((float) incrm)/5.0);
+  azimuthSpeed = (int) (4095.0*((float) msg.wrist_x)*((float) incrm)/5.0);
+
+  // gripper speed is a fraction of the speed of 4095, based on sensitivity
+  endSpeed = (int) (4095.0*((float) msg.grip)*((float) incrm)/5.0); 
   
   
   // gripper roll speed is a fraction of the speed of 4095, based on sensitivity
@@ -190,7 +190,8 @@ void setup()
   pinMode(directionSpinPin, OUTPUT);
   pinMode(directionRollPin, OUTPUT);
   pinMode(directionEndPin, OUTPUT);
-  horizonServo.attach(horizonPWMPin);
+  pinMode(directionAzimuthPin, OUTPUT);
+  pinMode(directionHorizonPin, OUTPUT);
 
   pwm.begin();
   
@@ -356,12 +357,7 @@ void loop()
   actuatorLower(lowerAngle,speed);                                          // Set lower actuator position
   
   actuatorUpper(upperAngle,speed);                                          // Set upper actuator position                                
-
-  pwm.setPWM(azimuthPWMPin, 0, map(azimuthAngle,0,180,SERVOMIN,SERVOMAX));  // Set servo position
-  delay(15);                                                                // ensure the servo has time to move
-  
-  horizonServo.write(horizonAngle);  // Set servo position
-  delay(15);                                                                // ensure the servo has time to move
+                                                        
 
   pwm.setPWM(spinPWMPin, 0, abs(spinSpeed));                                // Set Motor PWM
   digitalWrite(directionSpinPin, isPositive(spinSpeed));                    // Set Motor direction
@@ -371,7 +367,12 @@ void loop()
 
   pwm.setPWM(endPWMPin,0,abs(endSpeed));
   digitalWrite(directionEndPin,isPositive(endSpeed));
-  
+
+  pwm.setPWM(azimuthPWMPin,0,abs(azimuthSpeed));
+  digitalWrite(directionAzimuthPin,isPositive(azimuthSpeed));
+
+  pwm.setPWM(horizonPWMPin,0,abs(horizonSpeed));
+  digitalWrite(directionHorizonPin,isPositive(horizonSpeed));
     
   nh.spinOnce();
 }
